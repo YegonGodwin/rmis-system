@@ -1,0 +1,131 @@
+import { api } from './api'
+
+export type Modality = 'CT' | 'MRI' | 'X-Ray' | 'Ultrasound' | 'Mammography' | 'Fluoroscopy'
+export type Priority = 'Routine' | 'Urgent' | 'STAT'
+export type StudyStatus = 'Scheduled' | 'Checked In' | 'In Progress' | 'Completed' | 'Canceled'
+
+export type Study = {
+  _id: string
+  studyId: string
+  accessionNumber: string
+  patient: {
+    _id: string
+    mrn: string
+    fullName: string
+  }
+  imagingRequest?: {
+    _id: string
+    requestId: string
+    status: string
+    priority: string
+    modality: string
+  }
+  modality: Modality
+  bodyPart?: string
+  priority: Priority
+  clinicalIndication?: string
+  referringPhysician?: {
+    _id: string
+    username: string
+    fullName: string
+    role: string
+  }
+  scheduledStartAt: string
+  room?: {
+    _id: string
+    name: string
+    modality: string
+    status: string
+  }
+  performedStartAt?: string
+  performedEndAt?: string
+  status: StudyStatus
+  createdAt: string
+  updatedAt: string
+}
+
+export type StudiesResponse = {
+  studies: Study[]
+  page: number
+  limit: number
+  total: number
+}
+
+export const studiesService = {
+  async getStudies(params?: {
+    status?: string
+    priority?: string
+    modality?: string
+    patientId?: string
+    roomId?: string
+    from?: string
+    to?: string
+    limit?: number
+    page?: number
+  }) {
+    const queryParams = new URLSearchParams()
+    if (params) {
+      Object.entries(params).forEach(([key, value]) => {
+        if (value !== undefined) {
+          queryParams.append(key, String(value))
+        }
+      })
+    }
+    const queryString = queryParams.toString()
+    return api.get<StudiesResponse>(`/studies${queryString ? `?${queryString}` : ''}`)
+  },
+
+  async getStudyById(id: string) {
+    return api.get<{ study: Study }>(`/studies/${id}`)
+  },
+
+  async createStudy(data: {
+    patientId: string
+    accessionNumber: string
+    modality: Modality
+    bodyPart?: string
+    priority: Priority
+    clinicalIndication?: string
+    referringPhysicianId?: string
+    scheduledStartAt: string
+    roomId?: string
+    imagingRequestId?: string
+    studyId?: string
+  }) {
+    return api.post<{ study: Study }>(`/studies`, data)
+  },
+
+  async updateStudy(
+    id: string,
+    data: {
+      scheduledStartAt?: string
+      roomId?: string
+      priority?: Priority
+    },
+  ) {
+    return api.patch<{ study: Study }>(`/studies/${id}`, data)
+  },
+
+  async updateStudyStatus(id: string, status: StudyStatus) {
+    return api.patch<{ study: Study }>(`/studies/${id}/status`, { status })
+  },
+
+  async getTechnicianQueue(params?: {
+    status?: string
+    roomId?: string
+    priority?: string
+    modality?: string
+    limit?: number
+  }) {
+    const queryParams = new URLSearchParams()
+    if (params) {
+      Object.entries(params).forEach(([key, value]) => {
+        if (value !== undefined) {
+          queryParams.append(key, String(value))
+        }
+      })
+    }
+    const queryString = queryParams.toString()
+    return api.get<{ studies: Study[] }>(`/studies/queue${queryString ? `?${queryString}` : ''}`)
+  },
+}

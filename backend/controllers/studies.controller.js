@@ -1,0 +1,337 @@
+import { z } from 'zod';
+import Study from '../models/study.js';
+import Patient from '../models/patient.js';
+import ImagingRequest from '../models/imagingRequest.js';
+import ImagingRoom from '../models/imagingRoom.js';
+import httpError from '../utils/httpError.js';
+import audit from '../utils/audit.js';
+import { WorkflowOrchestrator } from '../services/workflow.service.js';
+
+const createStudySchema = z.object({
+  patientId: z.string().min(1),
+  imagingRequestId: z.string().optional(),
+  accessionNumber: z.string().min(1),
+  modality: z.enum(['CT', 'MRI', 'X-Ray', 'Ultrasound', 'Mammography', 'Fluoroscopy']),
+  bodyPart: z.string().optional(),
+  priority: z.enum(['Routine', 'Urgent', 'STAT']),
+  clinicalIndication: z.string().optional(),
+  referringPhysicianId: z.string().optional(),
+  scheduledStartAt: z.coerce.date(),
+  roomId: z.string().optional(),
+  studyId: z.string().optional(),
+});
+
+const updateStudySchema = z
+  .object({
+    scheduledStartAt: z.coerce.date().optional(),
+    roomId: z.string().optional(),
+    priority: z.enum(['Routine', 'Urgent', 'STAT']).optional(),
+  })
+  .strict();
+
+const statusSchema = z.object({
+  status: z.enum(['Scheduled', 'Checked In', 'In Progress', 'Completed', 'Canceled']),
+});
+
+const generateStudyId = async () => {
+  const count = await Study.estimatedDocumentCount();
+  return `STU-${String(count + 1).padStart(4, '0')}`;
+};
+
+export const listStudies = async (req, res, next) => {
+  try {
+    const {
+      status,
+      priority,
+      modality,
+      patientId,
+      roomId,
+      from,
+      to,
+      limit = '50',
+      page = '1',
+    } = req.query;
+
+    const filter = {};
+    if (status) filter.status = status;
+    if (priority) filter.priority = priority;
+    if (modality) filter.modality = modality;
+    if (patientId) filter.patient = patientId;
+    if (roomId) filter.room = roomId;
+
+    if (from || to) {
+      filter.scheduledStartAt = {};
+      if (from) filter.scheduledStartAt.$gte = new Date(String(from));
+      if (to) filter.scheduledStartAt.$lte = new Date(String(to));
+    }
+
+    const safeLimit = Math.min(Math.max(Number(limit) || 50, 1), 200);
+    const safePage = Math.max(Number(page) || 1, 1);
+    const skip = (safePage - 1) * safeLimit;
+
+    const [studies, total] = await Promise.all([
+      Study.find(filter)
+        .populate('patient', 'mrn fullName')
+        .populate('imagingRequest', 'requestId status priority modality')
+        .populate('referringPhysician', 'username fullName role')
+        .populate('room', 'name modality status')
+        .sort({ scheduledStartAt: 1 })
+        .skip(skip)
+        .limit(safeLimit),
+      Study.countDocuments(filter),
+    ]);
+
+    res.status(200).json({
+      studies,
+      page: safePage,
+      limit: safeLimit,
+      total,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const getStudyById = async (req, res, next) => {
+  try {
+    const study = await Study.findById(req.params.id)
+      .populate('patient', 'mrn fullName')
+      .populate('imagingRequest', 'requestId status priority modality')
+      .populate('referringPhysician', 'username fullName role')
+      .populate('room', 'name modality status');
+
+    if (!study) {
+      throw httpError(404, 'Study not found');
+    }
+
+    res.status(200).json({ study });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const createStudy = async (req, res, next) => {
+  try {
+    const parsed = createStudySchema.safeParse(req.body);
+    if (!parsed.success) {
+      throw httpError(400, parsed.error.issues[0]?.message || 'Invalid request body');
+    }
+
+    const data = parsed.data;
+
+    const patient = await Patient.findById(data.patientId);
+    if (!patient) {
+      throw httpError(404, 'Patient not found');
+    }
+
+    let imagingRequest = null;
+    if (data.imagingRequestId) {
+      imagingRequest = await ImagingRequest.findById(data.imagingRequestId);
+      if (!imagingRequest) {
+        throw httpError(404, 'Imaging request not found');
+      }
+      if (imagingRequest.status !== 'Approved') {
+        throw httpError(409, 'Only Approved imaging requests can be scheduled into a study');
+      }
+    }
+
+    let room = null;
+    if (data.roomId) {
+      room = await ImagingRoom.findById(data.roomId);
+      if (!room) {
+        throw httpError(404, 'Room not found');
+      }
+    }
+
+    const studyId = (data.studyId || (await generateStudyId())).toUpperCase().trim();
+    const accessionNumber = data.accessionNumber.toUpperCase().trim();
+
+    const study = await Study.create({
+      studyId,
+      accessionNumber,
+      patient: patient._id,
+      imagingRequest: imagingRequest?._id,
+      modality: data.modality,
+      bodyPart: data.bodyPart,
+      priority: data.priority,
+      clinicalIndication: data.clinicalIndication,
+      referringPhysician: data.referringPhysicianId,
+      scheduledStartAt: data.scheduledStartAt,
+      room: room?._id,
+      status: 'Scheduled',
+    });
+
+    if (imagingRequest) {
+      imagingRequest.status = 'Scheduled';
+      imagingRequest.scheduledAt = data.scheduledStartAt;
+      await imagingRequest.save();
+    }
+
+    const populated = await Study.findById(study._id)
+      .populate('patient', 'mrn fullName')
+      .populate('imagingRequest', 'requestId status priority modality')
+      .populate('referringPhysician', 'username fullName role')
+      .populate('room', 'name modality status');
+
+    await audit({
+      actorId: req.user?.id,
+      action: 'Scheduled study',
+      targetType: 'Study',
+      targetId: String(study._id),
+      ipAddress: req.ip,
+      metadata: {
+        studyId: study.studyId,
+        accessionNumber: study.accessionNumber,
+        patientId: String(study.patient),
+        modality: study.modality,
+        priority: study.priority,
+        roomId: study.room ? String(study.room) : null,
+        imagingRequestId: study.imagingRequest ? String(study.imagingRequest) : null,
+      },
+    });
+
+    res.status(201).json({ study: populated });
+  } catch (err) {
+    if (err?.code === 11000) {
+      next(httpError(409, 'Duplicate studyId or accessionNumber'));
+      return;
+    }
+    next(err);
+  }
+};
+
+export const updateStudy = async (req, res, next) => {
+  try {
+    const parsed = updateStudySchema.safeParse(req.body);
+    if (!parsed.success) {
+      throw httpError(400, parsed.error.issues[0]?.message || 'Invalid request body');
+    }
+
+    const study = await Study.findById(req.params.id);
+    if (!study) {
+      throw httpError(404, 'Study not found');
+    }
+
+    if (parsed.data.roomId) {
+      const room = await ImagingRoom.findById(parsed.data.roomId);
+      if (!room) {
+        throw httpError(404, 'Room not found');
+      }
+      study.room = room._id;
+    }
+
+    if (parsed.data.scheduledStartAt) {
+      study.scheduledStartAt = parsed.data.scheduledStartAt;
+    }
+
+    if (parsed.data.priority) {
+      study.priority = parsed.data.priority;
+    }
+
+    await study.save();
+
+    await audit({
+      actorId: req.user?.id,
+      action: 'Updated study',
+      targetType: 'Study',
+      targetId: String(study._id),
+      ipAddress: req.ip,
+      metadata: {
+        studyId: study.studyId,
+        changes: parsed.data,
+      },
+    });
+
+    const populated = await Study.findById(study._id)
+      .populate('patient', 'mrn fullName')
+      .populate('room', 'name modality status');
+
+    res.status(200).json({ study: populated });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const updateStudyStatus = async (req, res, next) => {
+  try {
+    const parsed = statusSchema.safeParse(req.body);
+    if (!parsed.success) {
+      throw httpError(400, parsed.error.issues[0]?.message || 'Invalid request body');
+    }
+
+    const study = await Study.findById(req.params.id);
+    if (!study) {
+      throw httpError(404, 'Study not found');
+    }
+
+    const newStatus = parsed.data.status;
+    const oldStatus = study.status;
+
+    if (newStatus === 'In Progress' && !study.performedStartAt) {
+      study.performedStartAt = new Date();
+    }
+
+    if (newStatus === 'Completed') {
+      if (!study.performedStartAt) {
+        study.performedStartAt = new Date();
+      }
+      study.performedEndAt = new Date();
+    }
+
+    study.status = newStatus;
+    await study.save();
+
+    // Trigger workflow orchestration
+    await WorkflowOrchestrator.onStudyStatusChange(study._id, newStatus);
+
+    await audit({
+      actorId: req.user?.id,
+      action: 'Updated study status',
+      targetType: 'Study',
+      targetId: String(study._id),
+      ipAddress: req.ip,
+      metadata: {
+        studyId: study.studyId,
+        from: oldStatus,
+        to: newStatus,
+      },
+    });
+
+    const populated = await Study.findById(study._id)
+      .populate('patient', 'mrn fullName')
+      .populate('room', 'name modality status');
+
+    res.status(200).json({ study: populated });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const technicianQueue = async (req, res, next) => {
+  try {
+    const { status, roomId, priority, modality, limit = '100' } = req.query;
+
+    const filter = {};
+
+    filter.status = status || { $in: ['Scheduled', 'Checked In', 'In Progress'] };
+
+    if (roomId) filter.room = roomId;
+    if (priority) filter.priority = priority;
+    if (modality) filter.modality = modality;
+
+    const safeLimit = Math.min(Math.max(Number(limit) || 100, 1), 200);
+
+    const studies = await Study.find(filter)
+      .populate('patient', 'mrn fullName')
+      .populate('room', 'name modality status')
+      .sort({
+        priority: 1,
+        scheduledStartAt: 1,
+      })
+      .limit(safeLimit);
+
+    res.status(200).json({ studies });
+  } catch (err) {
+    next(err);
+  }
+};
