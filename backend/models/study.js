@@ -69,9 +69,91 @@ const studySchema = new mongoose.Schema(
     performedEndAt: {
       type: Date,
     },
+    checkedInAt: {
+      type: Date,
+    },
+    checkedInBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      index: true,
+    },
+    identityMethod: {
+      type: String,
+      enum: ['Government ID', 'Insurance Card', 'Facility Bracelet', 'Biometric', 'Other'],
+    },
+    identityVerifiedAt: {
+      type: Date,
+    },
+    identityVerifiedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      index: true,
+    },
+    consentSigned: {
+      type: Boolean,
+    },
+    consentSignedAt: {
+      type: Date,
+    },
+    consentSignedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      index: true,
+    },
+    safetyScreeningCompleted: {
+      type: Boolean,
+    },
+    safetyScreeningAt: {
+      type: Date,
+    },
+    safetyScreeningBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      index: true,
+    },
+    safetyScreeningNotes: {
+      type: String,
+      trim: true,
+    },
+    delayedAt: {
+      type: Date,
+    },
+    delayedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      index: true,
+    },
+    delayReason: {
+      type: String,
+      trim: true,
+    },
+    canceledAt: {
+      type: Date,
+    },
+    canceledBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      index: true,
+    },
+    cancelReason: {
+      type: String,
+      trim: true,
+    },
+    noShowAt: {
+      type: Date,
+    },
+    noShowBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      index: true,
+    },
+    noShowReason: {
+      type: String,
+      trim: true,
+    },
     status: {
       type: String,
-      enum: ['Scheduled', 'Checked In', 'In Progress', 'Completed', 'Canceled'],
+      enum: ['Scheduled', 'Checked In', 'In Progress', 'Completed', 'Canceled', 'No Show', 'Delayed'],
       default: 'Scheduled',
       index: true,
     },

@@ -106,8 +106,17 @@ export const studiesService = {
     return api.patch<{ study: Study }>(`/studies/${id}`, data)
   },
 
-  async updateStudyStatus(id: string, status: StudyStatus) {
-    return api.patch<{ study: Study }>(`/studies/${id}/status`, { status })
+  async updateStudyStatus(
+    id: string,
+    status: StudyStatus,
+    data?: {
+      identityMethod?: 'Government ID' | 'Insurance Card' | 'Facility Bracelet' | 'Biometric' | 'Other'
+      consentSigned?: boolean
+      safetyScreeningCompleted?: boolean
+      safetyScreeningNotes?: string
+    },
+  ) {
+    return api.patch<{ study: Study }>(`/studies/${id}/status`, { status, ...data })
   },
 
   async getTechnicianQueue(params?: {

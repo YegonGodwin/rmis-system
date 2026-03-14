@@ -29,9 +29,20 @@ const updateStudySchema = z
   })
   .strict();
 
-const statusSchema = z.object({
-  status: z.enum(['Scheduled', 'Checked In', 'In Progress', 'Completed', 'Canceled']),
-});
+const statusSchema = z
+  .object({
+    status: z.enum(['Scheduled', 'Checked In', 'In Progress', 'Completed', 'Canceled', 'No Show', 'Delayed']),
+    identityMethod: z
+      .enum(['Government ID', 'Insurance Card', 'Facility Bracelet', 'Biometric', 'Other'])
+      .optional(),
+    consentSigned: z.coerce.boolean().optional(),
+    safetyScreeningCompleted: z.coerce.boolean().optional(),
+    safetyScreeningNotes: z.string().optional(),
+    delayReason: z.string().optional(),
+    cancelReason: z.string().optional(),
+    noShowReason: z.string().optional(),
+  })
+  .strict();
 
 const generateStudyId = async () => {
   const count = await Study.estimatedDocumentCount();
@@ -267,8 +278,57 @@ export const updateStudyStatus = async (req, res, next) => {
     const newStatus = parsed.data.status;
     const oldStatus = study.status;
 
+    if (['Delayed', 'Canceled', 'No Show'].includes(newStatus)) {
+      const reason =
+        newStatus === 'Delayed'
+          ? parsed.data.delayReason
+          : newStatus === 'Canceled'
+            ? parsed.data.cancelReason
+            : parsed.data.noShowReason;
+      if (!reason || !String(reason).trim()) {
+        throw httpError(400, `Reason is required for status ${newStatus}`);
+      }
+    }
+
     if (newStatus === 'In Progress' && !study.performedStartAt) {
       study.performedStartAt = new Date();
+    }
+
+    if (newStatus === 'Checked In') {
+      if (!study.checkedInAt) {
+        study.checkedInAt = new Date();
+      }
+      if (!study.checkedInBy && req.user?.id) {
+        study.checkedInBy = req.user.id;
+      }
+      if (parsed.data.identityMethod) {
+        study.identityMethod = parsed.data.identityMethod;
+        study.identityVerifiedAt = new Date();
+        if (req.user?.id) {
+          study.identityVerifiedBy = req.user.id;
+        }
+      }
+      if (typeof parsed.data.consentSigned !== 'undefined') {
+        study.consentSigned = parsed.data.consentSigned;
+        study.consentSignedAt = parsed.data.consentSigned ? new Date() : undefined;
+        if (req.user?.id && parsed.data.consentSigned) {
+          study.consentSignedBy = req.user.id;
+        } else if (!parsed.data.consentSigned) {
+          study.consentSignedBy = undefined;
+        }
+      }
+      if (typeof parsed.data.safetyScreeningCompleted !== 'undefined') {
+        study.safetyScreeningCompleted = parsed.data.safetyScreeningCompleted;
+        study.safetyScreeningAt = parsed.data.safetyScreeningCompleted ? new Date() : undefined;
+        if (req.user?.id && parsed.data.safetyScreeningCompleted) {
+          study.safetyScreeningBy = req.user.id;
+        } else if (!parsed.data.safetyScreeningCompleted) {
+          study.safetyScreeningBy = undefined;
+        }
+      }
+      if (parsed.data.safetyScreeningNotes) {
+        study.safetyScreeningNotes = parsed.data.safetyScreeningNotes;
+      }
     }
 
     if (newStatus === 'Completed') {
@@ -276,6 +336,24 @@ export const updateStudyStatus = async (req, res, next) => {
         study.performedStartAt = new Date();
       }
       study.performedEndAt = new Date();
+    }
+
+    if (newStatus === 'Delayed') {
+      study.delayedAt = new Date();
+      study.delayedBy = req.user?.id;
+      study.delayReason = parsed.data.delayReason?.trim();
+    }
+
+    if (newStatus === 'Canceled') {
+      study.canceledAt = new Date();
+      study.canceledBy = req.user?.id;
+      study.cancelReason = parsed.data.cancelReason?.trim();
+    }
+
+    if (newStatus === 'No Show') {
+      study.noShowAt = new Date();
+      study.noShowBy = req.user?.id;
+      study.noShowReason = parsed.data.noShowReason?.trim();
     }
 
     study.status = newStatus;
@@ -294,6 +372,12 @@ export const updateStudyStatus = async (req, res, next) => {
         studyId: study.studyId,
         from: oldStatus,
         to: newStatus,
+        identityMethod: parsed.data.identityMethod,
+        consentSigned: parsed.data.consentSigned,
+        safetyScreeningCompleted: parsed.data.safetyScreeningCompleted,
+        delayReason: parsed.data.delayReason,
+        cancelReason: parsed.data.cancelReason,
+        noShowReason: parsed.data.noShowReason,
       },
     });
 

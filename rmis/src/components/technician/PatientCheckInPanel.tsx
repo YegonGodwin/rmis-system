@@ -13,6 +13,8 @@ const PatientCheckInPanel = () => {
   const [loading, setLoading] = useState(false)
   const [checkingIn, setCheckingIn] = useState(false)
   const [showSuccess, setShowSuccess] = useState(false)
+  const [identityMethod, setIdentityMethod] = useState('Government ID')
+  const [safetyNotes, setSafetyNotes] = useState('')
 
   useEffect(() => {
     const delayDebounceFn = setTimeout(() => {
@@ -60,14 +62,23 @@ const PatientCheckInPanel = () => {
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     if (!selectedStudyId) return
+    const formData = new FormData(e.currentTarget)
+    const safetyScreeningCompleted = Boolean(formData.get('safetyScreeningCompleted'))
+    const consentSigned = Boolean(formData.get('consentSigned'))
 
     try {
       setCheckingIn(true)
-      await studiesService.updateStudyStatus(selectedStudyId, 'Checked In')
+      await studiesService.updateStudyStatus(selectedStudyId, 'Checked In', {
+        identityMethod,
+        consentSigned,
+        safetyScreeningCompleted,
+        safetyScreeningNotes: safetyNotes.trim() || undefined,
+      })
       setShowSuccess(true)
       setSelectedPatient(null)
       setPatientStudies([])
       setSelectedStudyId('')
+      setSafetyNotes('')
       
       setTimeout(() => setShowSuccess(false), 3000)
     } catch (err) {
@@ -172,9 +183,25 @@ const PatientCheckInPanel = () => {
             <div className="rounded-lg border-2 border-teal-200 bg-teal-50 p-4">
               <p className="mb-3 font-semibold text-teal-900">Pre-Scan Verification</p>
               <div className="space-y-3">
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-slate-700">Identity Verification Method</label>
+                  <select
+                    value={identityMethod}
+                    onChange={(e) => setIdentityMethod(e.target.value)}
+                    required
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-100"
+                  >
+                    <option value="Government ID">Government ID</option>
+                    <option value="Insurance Card">Insurance Card</option>
+                    <option value="Facility Bracelet">Facility Bracelet</option>
+                    <option value="Biometric">Biometric</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
                 <label className="flex items-center gap-3">
                   <input
                     type="checkbox"
+                    name="safetyScreeningCompleted"
                     required
                     className="h-5 w-5 rounded border-slate-300 text-teal-600 focus:ring-teal-500"
                   />
@@ -186,11 +213,23 @@ const PatientCheckInPanel = () => {
                 <label className="flex items-center gap-3">
                   <input
                     type="checkbox"
+                    name="consentSigned"
                     required
                     className="h-5 w-5 rounded border-slate-300 text-teal-600 focus:ring-teal-500"
                   />
                   <span className="text-sm text-slate-700">Informed consent form signed and documented</span>
                 </label>
+
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-slate-700">Safety Notes (Optional)</label>
+                  <textarea
+                    value={safetyNotes}
+                    onChange={(e) => setSafetyNotes(e.target.value)}
+                    rows={3}
+                    placeholder="Allergy notes, implants, pregnancy screening, special precautions..."
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-100"
+                  />
+                </div>
               </div>
             </div>
 
