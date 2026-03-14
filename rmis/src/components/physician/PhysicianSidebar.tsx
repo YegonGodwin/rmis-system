@@ -11,6 +11,7 @@ type PhysicianSidebarProps = {
 const navItems: NavItem[] = [
   { id: 'overview', label: 'Dashboard' },
   { id: 'patients', label: 'My Patients' },
+  { id: 'orders', label: 'My Orders' },
   { id: 'order', label: 'Order Imaging' },
   { id: 'results', label: 'Results & Reports' },
   { id: 'alerts', label: 'Critical Alerts' },

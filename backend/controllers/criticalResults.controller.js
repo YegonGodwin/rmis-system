@@ -45,6 +45,9 @@ export const listCriticalResults = async (req, res, next) => {
     if (patientId) filter.patient = patientId;
     if (notifiedTo) filter.notifiedTo = notifiedTo;
     if (radiologist) filter.radiologist = radiologist;
+    if (req.user?.role === 'Physician') {
+      filter.notifiedTo = req.user.id;
+    }
 
     const safeLimit = Math.min(Math.max(Number(limit) || 50, 1), 200);
     const safePage = Math.max(Number(page) || 1, 1);
@@ -76,6 +79,10 @@ export const getCriticalResultById = async (req, res, next) => {
     const result = await populateCriticalResult(CriticalResult.findById(req.params.id));
     if (!result) {
       throw httpError(404, 'Critical result not found');
+    }
+
+    if (req.user?.role === 'Physician' && String(result.notifiedTo?._id || result.notifiedTo) !== String(req.user.id)) {
+      throw httpError(403, 'Forbidden');
     }
 
     res.status(200).json({ result });
@@ -173,6 +180,9 @@ export const acknowledgeCriticalResult = async (req, res, next) => {
     const result = await CriticalResult.findById(req.params.id);
     if (!result) {
       throw httpError(404, 'Critical result not found');
+    }
+    if (req.user?.role === 'Physician' && String(result.notifiedTo) !== String(req.user.id)) {
+      throw httpError(403, 'Forbidden');
     }
 
     result.status = 'Acknowledged';

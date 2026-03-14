@@ -32,6 +32,9 @@ export const listImagingRequests = async (req, res, next) => {
     if (priority) filter.priority = priority;
     if (modality) filter.modality = modality;
     if (patientId) filter.patient = patientId;
+    if (req.user?.role !== 'Admin') {
+      filter.requestedBy = req.user?.id;
+    }
 
     const safeLimit = Math.min(Math.max(Number(limit) || 50, 1), 200);
     const safePage = Math.max(Number(page) || 1, 1);

@@ -2,7 +2,7 @@ import { api } from './api'
 
 export type Modality = 'CT' | 'MRI' | 'X-Ray' | 'Ultrasound' | 'Mammography' | 'Fluoroscopy'
 export type Priority = 'Routine' | 'Urgent' | 'STAT'
-export type RequestStatus = 'Pending' | 'Approved' | 'Rejected' | 'Scheduled'
+export type RequestStatus = 'Pending' | 'Approved' | 'Rejected' | 'Scheduled' | 'Completed'
 
 export type ImagingRequest = {
   _id: string

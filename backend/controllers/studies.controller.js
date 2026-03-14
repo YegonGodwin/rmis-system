@@ -155,7 +155,7 @@ export const createStudy = async (req, res, next) => {
       bodyPart: data.bodyPart,
       priority: data.priority,
       clinicalIndication: data.clinicalIndication,
-      referringPhysician: data.referringPhysicianId,
+      referringPhysician: data.referringPhysicianId || imagingRequest?.requestedBy,
       scheduledStartAt: data.scheduledStartAt,
       room: room?._id,
       status: 'Scheduled',

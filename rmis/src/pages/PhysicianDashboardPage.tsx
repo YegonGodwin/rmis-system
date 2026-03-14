@@ -1,6 +1,7 @@
 import { useMemo, useState, useEffect } from 'react'
 import PhysicianSidebar from '../components/physician/PhysicianSidebar'
 import MyPatientsPanel from '../components/physician/MyPatientsPanel'
+import MyOrdersPanel from '../components/physician/MyOrdersPanel'
 import OrderImagingPanel from '../components/physician/OrderImagingPanel'
 import ResultsPanel from '../components/physician/ResultsPanel'
 import CriticalAlertsPanel from '../components/physician/CriticalAlertsPanel'
@@ -99,6 +100,8 @@ const PhysicianDashboardPage = ({ onLogout }: PhysicianDashboardPageProps) => {
                 <h2 className="mt-1 text-2xl font-bold">
                   {activeSection === 'patients'
                     ? 'My Patients'
+                    : activeSection === 'orders'
+                      ? 'My Orders'
                     : activeSection === 'order'
                       ? 'Order Imaging'
                       : activeSection === 'results'
@@ -112,6 +115,7 @@ const PhysicianDashboardPage = ({ onLogout }: PhysicianDashboardPageProps) => {
                 <button
                   type="button"
                   className="rounded-lg bg-white/15 px-3 py-2 text-sm font-semibold transition hover:bg-white/25"
+                  onClick={() => setActiveSection('order')}
                 >
                   Quick Order
                 </button>
@@ -129,6 +133,8 @@ const PhysicianDashboardPage = ({ onLogout }: PhysicianDashboardPageProps) => {
           <div className="flex-1 overflow-y-auto space-y-4 pb-4">
             {activeSection === 'patients' ? (
               <MyPatientsPanel />
+            ) : activeSection === 'orders' ? (
+              <MyOrdersPanel />
             ) : activeSection === 'order' ? (
               <OrderImagingPanel />
             ) : activeSection === 'results' ? (

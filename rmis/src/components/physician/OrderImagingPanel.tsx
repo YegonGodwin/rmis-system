@@ -315,6 +315,19 @@ const OrderImagingPanel = () => {
                   </div>
                   <div className="text-right">
                     <span
+                      className={`mb-1 inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+                        order.status === 'Approved'
+                          ? 'bg-emerald-100 text-emerald-700'
+                          : order.status === 'Rejected'
+                            ? 'bg-red-100 text-red-700'
+                            : order.status === 'Scheduled'
+                              ? 'bg-purple-100 text-purple-700'
+                              : 'bg-slate-100 text-slate-700'
+                      }`}
+                    >
+                      {order.status}
+                    </span>
+                    <span
                       className={`rounded-full px-2 py-0.5 text-xs font-medium ${
                         order.priority === 'STAT'
                           ? 'bg-red-100 text-red-700'
@@ -326,6 +339,15 @@ const OrderImagingPanel = () => {
                       {order.priority}
                     </span>
                     <p className="mt-1 text-xs text-slate-500">{new Date(order.createdAt).toLocaleDateString()}</p>
+                    {order.approvedAt && (
+                      <p className="text-xs text-emerald-700">Approved: {new Date(order.approvedAt).toLocaleDateString()}</p>
+                    )}
+                    {order.rejectedAt && (
+                      <p className="text-xs text-red-700">Rejected: {new Date(order.rejectedAt).toLocaleDateString()}</p>
+                    )}
+                    {order.scheduledAt && (
+                      <p className="text-xs text-purple-700">Scheduled: {new Date(order.scheduledAt).toLocaleDateString()}</p>
+                    )}
                   </div>
                 </div>
                 <p className="mt-2 text-sm text-slate-600">{order.clinicalIndication}</p>

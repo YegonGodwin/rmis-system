@@ -45,6 +45,8 @@ const maybeCreateCriticalResultForReport = async ({ report, study, patient, user
   const count = await CriticalResult.estimatedDocumentCount();
   const criticalResultId = `CR-${String(count + 1000)}`;
 
+  const notifiedToUserId = study?.referringPhysician || userId;
+
   await CriticalResult.create({
     criticalResultId,
     report: report._id,
@@ -54,7 +56,7 @@ const maybeCreateCriticalResultForReport = async ({ report, study, patient, user
     finding: report.impression,
     severity: 'Critical',
     radiologist: userId,
-    notifiedTo: userId,
+    notifiedTo: notifiedToUserId,
     notificationMethod: 'Phone',
     status: 'Pending',
     notifiedAt: new Date(),
@@ -82,6 +84,26 @@ export const listReports = async (req, res, next) => {
     const safePage = Math.max(Number(page) || 1, 1);
     const skip = (safePage - 1) * safeLimit;
 
+    if (req.user?.role === 'Physician') {
+      const studies = await Study.find({ referringPhysician: req.user.id }).select('_id');
+      const studyIds = studies.map((s) => s._id);
+      if (studyIds.length === 0) {
+        res.status(200).json({ reports: [], page: safePage, limit: safeLimit, total: 0 });
+        return;
+      }
+
+      if (studyId) {
+        const requestedId = String(studyId);
+        const isAllowed = studyIds.some((id) => String(id) === requestedId);
+        if (!isAllowed) {
+          res.status(200).json({ reports: [], page: safePage, limit: safeLimit, total: 0 });
+          return;
+        }
+      } else {
+        filter.study = { $in: studyIds };
+      }
+    }
+
     const [reports, total] = await Promise.all([
       populateReport(
         RadiologyReport.find(filter)
@@ -108,6 +130,13 @@ export const getReportById = async (req, res, next) => {
     const report = await populateReport(RadiologyReport.findById(req.params.id));
     if (!report) {
       throw httpError(404, 'Report not found');
+    }
+
+    if (req.user?.role === 'Physician') {
+      const study = await Study.findById(report.study?._id || report.study).select('referringPhysician');
+      if (!study || String(study.referringPhysician) !== String(req.user.id)) {
+        throw httpError(403, 'Forbidden');
+      }
     }
 
     res.status(200).json({ report });

@@ -116,6 +116,19 @@ export const listPatients = async (req, res, next) => {
       ];
     }
 
+    if (req.user?.role === 'Physician') {
+      const [requestPatientIds, studyPatientIds] = await Promise.all([
+        ImagingRequest.find({ requestedBy: req.user.id }).distinct('patient'),
+        Study.find({ referringPhysician: req.user.id }).distinct('patient'),
+      ]);
+      const patientIds = Array.from(new Set([...requestPatientIds, ...studyPatientIds].map(String)));
+      if (patientIds.length === 0) {
+        res.status(200).json({ patients: [], page: 1, limit: Math.min(Math.max(Number(limit) || 50, 1), 200), total: 0 });
+        return;
+      }
+      filter._id = { $in: patientIds };
+    }
+
     const safeLimit = Math.min(Math.max(Number(limit) || 50, 1), 200);
     const safePage = Math.max(Number(page) || 1, 1);
     const skip = (safePage - 1) * safeLimit;
