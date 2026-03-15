@@ -69,6 +69,18 @@ const studySchema = new mongoose.Schema(
     performedEndAt: {
       type: Date,
     },
+    assignedRadiologist: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      index: true,
+    },
+    assignedAt: {
+      type: Date,
+    },
+    assignedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+    },
     checkedInAt: {
       type: Date,
     },

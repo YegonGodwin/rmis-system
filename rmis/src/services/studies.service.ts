@@ -62,6 +62,12 @@ export type Study = {
   }
   performedStartAt?: string
   performedEndAt?: string
+  assignedRadiologist?: {
+    _id: string
+    username: string
+    fullName: string
+  }
+  assignedAt?: string
   status: StudyStatus
   createdAt: string
   updatedAt: string
@@ -180,5 +186,9 @@ export const studiesService = {
 
   async deleteStudyImage(studyId: string, imageId: string) {
     return api.delete<{ message: string }>(`/studies/${studyId}/images/${imageId}`)
+  },
+
+  async assignStudy(studyId: string, radiologistId: string | null) {
+    return api.patch<{ study: Study }>(`/studies/${studyId}/assign`, { radiologistId })
   },
 }

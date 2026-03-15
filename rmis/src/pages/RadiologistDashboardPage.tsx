@@ -13,7 +13,13 @@ type RadiologistDashboardPageProps = {
 
 const RadiologistDashboardPage = ({ onLogout }: RadiologistDashboardPageProps) => {
   const [activeSection, setActiveSection] = useState('overview')
+  const [pendingStudy, setPendingStudy] = useState<import('../services/studies.service').Study | null>(null)
   const { stats, worklist, loading, refresh } = useRadiologistDashboard()
+
+  const handleOpenStudy = (study: import('../services/studies.service').Study) => {
+    setPendingStudy(study)
+    setActiveSection('reporting')
+  }
 
   const kpis = useMemo(
     () => [
@@ -69,9 +75,9 @@ const RadiologistDashboardPage = ({ onLogout }: RadiologistDashboardPageProps) =
 
           <div className="flex-1 overflow-y-auto space-y-4 pb-4">
             {activeSection === 'worklist' ? (
-              <WorklistPanel />
+              <WorklistPanel onOpenStudy={handleOpenStudy} />
             ) : activeSection === 'reporting' ? (
-              <ReportingPanel />
+              <ReportingPanel preselectedStudy={pendingStudy} />
             ) : activeSection === 'reports' ? (
               <MyReportsPanel />
             ) : activeSection === 'templates' ? (

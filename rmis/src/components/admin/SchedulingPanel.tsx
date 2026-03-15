@@ -4,7 +4,6 @@ import { roomsService, type ImagingRoom, type RoomStatus } from '../../services/
 import { patientService, type Patient } from '../../services/patient.service'
 import { userService, type User } from '../../services/user.service'
 import type { ImagingRequest } from '../../services/imagingRequest.service'
-
 type SchedulingPanelProps = {
     initialDate?: string
     prefillRequest?: ImagingRequest | null
@@ -19,6 +18,7 @@ const SchedulingPanel = ({ initialDate, prefillRequest, onClearPrefill }: Schedu
     const [rooms, setRooms] = useState<ImagingRoom[]>([])
     const [patients, setPatients] = useState<Patient[]>([])
     const [physicians, setPhysicians] = useState<User[]>([])
+    const [radiologists, setRadiologists] = useState<User[]>([])
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
     const [isAddModalOpen, setIsAddModalOpen] = useState(false)
@@ -72,7 +72,7 @@ const SchedulingPanel = ({ initialDate, prefillRequest, onClearPrefill }: Schedu
                 const endDate = new Date(startDate)
                 endDate.setDate(endDate.getDate() + 1)
                 
-                const [studiesData, roomsData, patientsData, physiciansData] = await Promise.all([
+                const [studiesData, roomsData, patientsData, physiciansData, radiologistsData] = await Promise.all([
                     studiesService.getStudies({
                         from: startDate.toISOString(),
                         to: endDate.toISOString(),
@@ -81,11 +81,13 @@ const SchedulingPanel = ({ initialDate, prefillRequest, onClearPrefill }: Schedu
                     roomsService.getRooms(),
                     patientService.list(),
                     userService.listUsers({ role: 'Physician' }),
+                    userService.listUsers({ role: 'Radiologist' }),
                 ])
                 setStudies(studiesData.studies)
                 setRooms(roomsData.rooms)
                 setPatients(patientsData.patients)
                 setPhysicians(physiciansData)
+                setRadiologists(radiologistsData)
             } catch (err) {
                 setError(err instanceof Error ? err.message : 'Failed to fetch scheduling data')
             } finally {
@@ -136,8 +138,7 @@ const SchedulingPanel = ({ initialDate, prefillRequest, onClearPrefill }: Schedu
                     limit: 100,
                 }),
             ])
-            setStudies(studiesData.studies)
-        } catch (err) {
+            setStudies(studiesData.studies)        } catch (err) {
             alert(err instanceof Error ? err.message : 'Failed to create appointment')
         } finally {
             setIsSubmitting(false)
@@ -147,20 +148,31 @@ const SchedulingPanel = ({ initialDate, prefillRequest, onClearPrefill }: Schedu
     const handleStatusChange = async (studyId: string, newStatus: StudyStatus) => {
         try {
             await studiesService.updateStudyStatus(studyId, newStatus)
-            const startDate = new Date(selectedDate)
-            const endDate = new Date(startDate)
-            endDate.setDate(endDate.getDate() + 1)
-            const [studiesData] = await Promise.all([
-                studiesService.getStudies({
-                    from: startDate.toISOString(),
-                    to: endDate.toISOString(),
-                    limit: 100,
-                }),
-            ])
-            setStudies(studiesData.studies)
+            await refreshStudies()
         } catch (err) {
             alert(err instanceof Error ? err.message : 'Failed to update status')
         }
+    }
+
+    const handleAssignRadiologist = async (studyId: string, radiologistId: string) => {
+        try {
+            await studiesService.assignStudy(studyId, radiologistId || null)
+            await refreshStudies()
+        } catch (err) {
+            alert(err instanceof Error ? err.message : 'Failed to assign radiologist')
+        }
+    }
+
+    const refreshStudies = async () => {
+        const startDate = new Date(selectedDate)
+        const endDate = new Date(startDate)
+        endDate.setDate(endDate.getDate() + 1)
+        const data = await studiesService.getStudies({
+            from: startDate.toISOString(),
+            to: endDate.toISOString(),
+            limit: 100,
+        })
+        setStudies(data.studies)
     }
 
     const sortedStudies = useMemo(() => {
@@ -315,6 +327,23 @@ const SchedulingPanel = ({ initialDate, prefillRequest, onClearPrefill }: Schedu
                                             >
                                                 {study.status}
                                             </span>
+                                            {study.status === 'Completed' && (
+                                                <select
+                                                    value={study.assignedRadiologist?._id || ''}
+                                                    onChange={(e) => handleAssignRadiologist(study._id, e.target.value)}
+                                                    className={`rounded border px-2 py-1 text-xs focus:outline-none ${
+                                                        study.assignedRadiologist
+                                                            ? 'border-purple-300 bg-purple-50 text-purple-700'
+                                                            : 'border-amber-300 bg-amber-50 text-amber-700'
+                                                    }`}
+                                                    title="Assign radiologist"
+                                                >
+                                                    <option value="">Assign radiologist...</option>
+                                                    {radiologists.map((r) => (
+                                                        <option key={r.id} value={r.id}>{r.fullName}</option>
+                                                    ))}
+                                                </select>
+                                            )}
                                         </div>
                                     </div>
                                 </div>

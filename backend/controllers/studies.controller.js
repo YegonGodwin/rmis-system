@@ -86,6 +86,7 @@ export const listStudies = async (req, res, next) => {
         .populate('imagingRequest', 'requestId status priority modality')
         .populate('referringPhysician', 'username fullName role')
         .populate('room', 'name modality status')
+        .populate('assignedRadiologist', 'fullName username')
         .sort({ scheduledStartAt: 1 })
         .skip(skip)
         .limit(safeLimit),
@@ -386,6 +387,69 @@ export const updateStudyStatus = async (req, res, next) => {
       .populate('room', 'name modality status');
 
     res.status(200).json({ study: populated });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const assignStudy = async (req, res, next) => {
+  try {
+    const { radiologistId } = req.body;
+    if (!radiologistId && radiologistId !== null) {
+      throw httpError(400, 'radiologistId is required (or null to unassign)');
+    }
+
+    const study = await Study.findById(req.params.id);
+    if (!study) throw httpError(404, 'Study not found');
+
+    if (study.status !== 'Completed') {
+      throw httpError(409, 'Only completed studies can be assigned for reporting');
+    }
+
+    if (radiologistId) {
+      const User = (await import('../models/user.js')).default;
+      const radiologist = await User.findById(radiologistId);
+      if (!radiologist || radiologist.role !== 'Radiologist') {
+        throw httpError(404, 'Radiologist not found');
+      }
+      study.assignedRadiologist = radiologistId;
+      study.assignedAt = new Date();
+      study.assignedBy = req.user?.id;
+    } else {
+      // unassign
+      study.assignedRadiologist = undefined;
+      study.assignedAt = undefined;
+      study.assignedBy = undefined;
+    }
+
+    await study.save();
+
+    if (radiologistId) {
+      const { emitToUser } = await import('../utils/socket.js');
+      const populated = await Study.findById(study._id).populate('patient', 'fullName mrn');
+      emitToUser(radiologistId, 'NOTIFICATION', {
+        title: 'Study Assigned',
+        message: `You have been assigned a ${populated.modality} study for ${populated.patient.fullName}.`,
+        type: 'info',
+        studyId: String(study._id),
+      });
+    }
+
+    await audit({
+      actorId: req.user?.id,
+      action: radiologistId ? 'Assigned study to radiologist' : 'Unassigned study from radiologist',
+      targetType: 'Study',
+      targetId: String(study._id),
+      ipAddress: req.ip,
+      metadata: { studyId: study.studyId, radiologistId },
+    });
+
+    const result = await Study.findById(study._id)
+      .populate('patient', 'mrn fullName')
+      .populate('assignedRadiologist', 'fullName username')
+      .populate('room', 'name modality status');
+
+    res.status(200).json({ study: result });
   } catch (err) {
     next(err);
   }

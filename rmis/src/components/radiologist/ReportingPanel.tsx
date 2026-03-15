@@ -5,7 +5,7 @@ import { reportsService } from '../../services/reports.service'
 import { reportTemplatesService } from '../../services/reportTemplates.service'
 import type { ReportTemplate } from '../../services/reportTemplates.service'
 
-const ReportingPanel = () => {
+const ReportingPanel = ({ preselectedStudy }: { preselectedStudy?: Study | null }) => {
   const [searchTerm, setSearchTerm] = useState('')
   const [studies, setStudies] = useState<Study[]>([])
   const [selectedStudy, setSelectedStudy] = useState<Study | null>(null)
@@ -26,6 +26,14 @@ const ReportingPanel = () => {
     recommendations: '',
     isCritical: false
   })
+
+  // Auto-select when navigated from worklist
+  useEffect(() => {
+    if (preselectedStudy) {
+      handleSelectStudy(preselectedStudy)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [preselectedStudy?._id])
 
   useEffect(() => {
     const delayDebounceFn = setTimeout(() => {

@@ -3,12 +3,15 @@ import { studiesService } from '../services/studies.service'
 import type { Study } from '../services/studies.service'
 import { reportsService } from '../services/reports.service'
 import type { Report } from '../services/reports.service'
+import { auth } from '../services/auth'
+import type { AuthUser } from '../services/auth'
 
 export const useRadiologistDashboard = () => {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [worklist, setWorklist] = useState<Study[]>([])
   const [recentReports, setRecentReports] = useState<Report[]>([])
+  const [currentUser, setCurrentUser] = useState<AuthUser | null>(null)
   const [stats, setStats] = useState({
     pendingStudies: 0,
     statPriority: 0,
@@ -23,16 +26,27 @@ export const useRadiologistDashboard = () => {
   const fetchData = useCallback(async () => {
     try {
       setLoading(true)
+      let user = currentUser
+      if (!user) {
+        const res = await auth.me()
+        user = res.user
+        setCurrentUser(user)
+      }
+
       const [worklistRes, reportsTodayRes, pendingReviewRes, criticalRes] = await Promise.all([
-        studiesService.getStudies({ status: 'Completed', limit: 10 }), // Completed studies need reporting
-        reportsService.getReports({ status: 'Final', limit: 50 }), // Reports finalized
-        reportsService.getReports({ status: 'Draft', limit: 50 }), // Pending review/drafts
-        reportsService.getReports({ isCritical: true, limit: 10 }) // Critical findings
+        studiesService.getStudies({ status: 'Completed', limit: 200 }),
+        reportsService.getReports({ status: 'Final', limit: 50 }),
+        reportsService.getReports({ status: 'Draft', limit: 50 }),
+        reportsService.getReports({ isCritical: true, limit: 10 }),
       ])
 
-      setWorklist(worklistRes.studies)
+      // Only show studies assigned to this radiologist
+      const myStudies = worklistRes.studies.filter(
+        (s) => s.assignedRadiologist?._id === user!.id,
+      )
+      setWorklist(myStudies)
       
-      const statPriority = worklistRes.studies.filter(s => s.priority === 'STAT').length
+      const statPriority = myStudies.filter(s => s.priority === 'STAT').length
       const reportsFinalized = reportsTodayRes.total
       const pendingReview = pendingReviewRes.total
       const criticalFindings = criticalRes.total
@@ -41,7 +55,7 @@ export const useRadiologistDashboard = () => {
 
       setStats(prev => ({
         ...prev,
-        pendingStudies: worklistRes.total,
+        pendingStudies: myStudies.length,
         statPriority,
         reportsToday: reportsFinalized,
         reportsFinalized,

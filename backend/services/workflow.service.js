@@ -14,12 +14,21 @@ export const WorkflowOrchestrator = {
 
       const imagingRequest = study.imagingRequest;
 
-      // Notify Radiologist if study is completed
+      // Notify admin to assign a radiologist; also broadcast to radiologists as fallback
       if (newStatus === 'Completed') {
-        emitToRole('Radiologist', 'NOTIFICATION', {
-          title: 'Study Completed',
-          message: `New ${study.modality} for ${study.patient.fullName} is ready for reporting.`,
+        emitToRole('Admin', 'NOTIFICATION', {
+          title: 'Study Ready for Assignment',
+          message: `${study.modality} for ${study.patient.fullName} is complete and needs a radiologist assigned.`,
           type: 'info',
+          studyId: String(study._id),
+        });
+
+        // Also notify radiologists so they can self-assign if no admin is online
+        emitToRole('Radiologist', 'STUDY_AVAILABLE', {
+          title: 'New Study Available',
+          message: `${study.modality} for ${study.patient.fullName} is ready — awaiting assignment.`,
+          type: 'info',
+          studyId: String(study._id),
         });
 
         if (imagingRequest && imagingRequest.status !== 'Completed') {
