@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { studiesService } from '../../services/studies.service'
-import type { Study } from '../../services/studies.service'
+import type { Study, StudyImageMeta } from '../../services/studies.service'
 import { reportsService } from '../../services/reports.service'
 import { reportTemplatesService } from '../../services/reportTemplates.service'
 import type { ReportTemplate } from '../../services/reportTemplates.service'
@@ -15,6 +15,8 @@ const ReportingPanel = () => {
   const [submitting, setSubmitting] = useState(false)
   const [showSuccess, setShowSuccess] = useState(false)
   const [lastStatus, setLastStatus] = useState('')
+  const [studyImages, setStudyImages] = useState<StudyImageMeta[]>([])
+  const [lightboxIdx, setLightboxIdx] = useState<number | null>(null)
 
   const [formData, setFormData] = useState({
     studyType: '',
@@ -53,11 +55,23 @@ const ReportingPanel = () => {
     setSelectedStudy(study)
     setStudies([])
     setSearchTerm('')
+    setStudyImages([])
+    setLightboxIdx(null)
     setFormData({
       ...formData,
       studyType: `${study.modality} ${study.bodyPart}`
     })
     fetchTemplates(study.modality, study.bodyPart)
+    fetchStudyImages(study._id)
+  }
+
+  const fetchStudyImages = async (studyId: string) => {
+    try {
+      const res = await studiesService.getStudyImages(studyId)
+      setStudyImages(res.images)
+    } catch (err) {
+      console.error('Failed to load study images:', err)
+    }
   }
 
   const fetchTemplates = async (modality: string, bodyPart?: string) => {
@@ -188,8 +202,50 @@ const ReportingPanel = () => {
               </button>
             </div>
 
-            {showTemplates && templates.length > 0 && (
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 rounded-xl bg-purple-50 p-4 border border-purple-100 animate-in zoom-in-95 duration-200">
+            {/* Image viewer strip */}
+            {studyImages.length > 0 ? (
+              <div className="rounded-xl border border-slate-200 bg-slate-900 p-4">
+                <div className="mb-3 flex items-center justify-between">
+                  <p className="text-sm font-semibold text-slate-300">
+                    Study Images
+                    <span className="ml-2 rounded-full bg-slate-700 px-2 py-0.5 text-xs text-slate-400">
+                      {studyImages.length}
+                    </span>
+                  </p>
+                  {studyImages[0]?.seriesDescription && (
+                    <span className="text-xs text-slate-500">{studyImages[0].seriesDescription}</span>
+                  )}
+                </div>
+                <div className="flex gap-2 overflow-x-auto pb-2">
+                  {studyImages.map((img, idx) => (
+                    <button
+                      key={img._id}
+                      onClick={() => setLightboxIdx(idx)}
+                      className="relative flex-shrink-0 overflow-hidden rounded-lg border-2 border-transparent transition hover:border-purple-400 focus:outline-none focus:border-purple-500"
+                      style={{ width: 96, height: 96 }}
+                      title={`Image ${idx + 1}${img.notes ? ` — ${img.notes}` : ''}`}
+                    >
+                      {img.imageData ? (
+                        <img src={img.imageData} alt={`Image ${idx + 1}`} className="h-full w-full object-cover" />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center bg-slate-800 text-slate-500 text-xs">
+                          #{idx + 1}
+                        </div>
+                      )}
+                      <span className="absolute bottom-0 left-0 right-0 bg-black/60 py-0.5 text-center text-[10px] text-white">
+                        {idx + 1}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-5 text-center text-sm text-slate-400">
+                No images submitted for this study yet.
+              </div>
+            )}
+
+            {showTemplates && templates.length > 0 && (              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 rounded-xl bg-purple-50 p-4 border border-purple-100 animate-in zoom-in-95 duration-200">
                 {templates.map(t => (
                   <button
                     key={t._id}
@@ -312,6 +368,66 @@ const ReportingPanel = () => {
           </div>
         )}
       </div>
+
+      {/* Lightbox */}
+      {lightboxIdx !== null && studyImages[lightboxIdx] && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/90"
+          onClick={() => setLightboxIdx(null)}
+        >
+          <button
+            onClick={(e) => { e.stopPropagation(); setLightboxIdx((i) => (i !== null && i > 0 ? i - 1 : i)) }}
+            disabled={lightboxIdx === 0}
+            className="absolute left-4 top-1/2 -translate-y-1/2 rounded-full bg-white/10 p-3 text-white hover:bg-white/20 disabled:opacity-30"
+          >
+            <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+          </button>
+
+          <div className="flex max-h-screen max-w-5xl flex-col items-center p-4" onClick={(e) => e.stopPropagation()}>
+            {studyImages[lightboxIdx].imageData ? (
+              <img
+                src={studyImages[lightboxIdx].imageData}
+                alt={`Image ${lightboxIdx + 1}`}
+                className="max-h-[80vh] max-w-full rounded-lg object-contain shadow-2xl"
+              />
+            ) : (
+              <div className="flex h-64 w-64 items-center justify-center rounded-lg bg-slate-800 text-slate-400">
+                Image data unavailable
+              </div>
+            )}
+            <div className="mt-3 text-center text-sm text-slate-300">
+              <span className="font-semibold">{lightboxIdx + 1} / {studyImages.length}</span>
+              {studyImages[lightboxIdx].seriesDescription && (
+                <span className="ml-2 text-slate-400">&mdash; {studyImages[lightboxIdx].seriesDescription}</span>
+              )}
+              {studyImages[lightboxIdx].notes && (
+                <p className="mt-1 text-xs text-slate-500">{studyImages[lightboxIdx].notes}</p>
+              )}
+            </div>
+          </div>
+
+          <button
+            onClick={(e) => { e.stopPropagation(); setLightboxIdx((i) => (i !== null && i < studyImages.length - 1 ? i + 1 : i)) }}
+            disabled={lightboxIdx === studyImages.length - 1}
+            className="absolute right-4 top-1/2 -translate-y-1/2 rounded-full bg-white/10 p-3 text-white hover:bg-white/20 disabled:opacity-30"
+          >
+            <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+          </button>
+
+          <button
+            onClick={() => setLightboxIdx(null)}
+            className="absolute right-4 top-4 rounded-full bg-white/10 p-2 text-white hover:bg-white/20"
+          >
+            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+      )}
     </div>
   )
 }

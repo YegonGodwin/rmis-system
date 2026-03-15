@@ -4,6 +4,29 @@ export type Modality = 'CT' | 'MRI' | 'X-Ray' | 'Ultrasound' | 'Mammography' | '
 export type Priority = 'Routine' | 'Urgent' | 'STAT'
 export type StudyStatus = 'Scheduled' | 'Checked In' | 'In Progress' | 'Completed' | 'Canceled'
 
+export type StudyImageUpload = {
+  imageData: string // base64 data URI
+  mimeType?: 'image/jpeg' | 'image/png' | 'image/webp'
+  seriesDescription?: string
+  seriesNumber?: number
+  instanceNumber?: number
+  notes?: string
+}
+
+export type StudyImageMeta = {
+  _id: string
+  study: string
+  seriesDescription: string
+  seriesNumber: number
+  instanceNumber: number
+  mimeType: string
+  fileSizeBytes?: number
+  notes?: string
+  imageData?: string // only present when metaOnly=false
+  uploadedBy?: string
+  createdAt: string
+}
+
 export type Study = {
   _id: string
   studyId: string
@@ -136,5 +159,26 @@ export const studiesService = {
     }
     const queryString = queryParams.toString()
     return api.get<{ studies: Study[] }>(`/studies/queue${queryString ? `?${queryString}` : ''}`)
+  },
+
+  async uploadImages(
+    studyId: string,
+    images: StudyImageUpload[],
+    completeStudy = true,
+  ) {
+    return api.post<{ uploaded: number; studyStatus: string }>(`/studies/${studyId}/images`, {
+      images,
+      completeStudy,
+    })
+  },
+
+  async getStudyImages(studyId: string, metaOnly = false) {
+    return api.get<{ images: StudyImageMeta[]; total: number }>(
+      `/studies/${studyId}/images${metaOnly ? '?metaOnly=true' : ''}`,
+    )
+  },
+
+  async deleteStudyImage(studyId: string, imageId: string) {
+    return api.delete<{ message: string }>(`/studies/${studyId}/images/${imageId}`)
   },
 }

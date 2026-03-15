@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { studiesService } from '../../services/studies.service'
 import type { Study, StudyStatus } from '../../services/studies.service'
+import ImageUploadModal from './ImageUploadModal'
 
 const ScanQueuePanel = () => {
   const [queue, setQueue] = useState<Study[]>([])
@@ -8,6 +9,7 @@ const ScanQueuePanel = () => {
   const [filter, setFilter] = useState<'All' | 'STAT' | 'Checked In'>('All')
   const [selectedItem, setSelectedItem] = useState<Study | null>(null)
   const [updating, setUpdating] = useState(false)
+  const [uploadTarget, setUploadTarget] = useState<Study | null>(null)
 
   const fetchQueue = useCallback(async () => {
     try {
@@ -174,8 +176,7 @@ const ScanQueuePanel = () => {
         </div>
       </div>
 
-      {selectedItem && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setSelectedItem(null)}>
+      {selectedItem && (        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setSelectedItem(null)}>
           <div className="w-full max-w-2xl rounded-2xl bg-white p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
             <div className="mb-6 flex items-start justify-between border-b border-slate-200 pb-4">
               <div>
@@ -244,10 +245,13 @@ const ScanQueuePanel = () => {
                 {selectedItem.status === 'In Progress' && (
                   <button
                     disabled={updating}
-                    onClick={() => handleUpdateStatus(selectedItem._id, 'Completed')}
+                    onClick={() => {
+                      setSelectedItem(null)
+                      setUploadTarget(selectedItem)
+                    }}
                     className="rounded-lg bg-emerald-600 py-2.5 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-50"
                   >
-                    Complete Scan
+                    Submit Images &amp; Complete
                   </button>
                 )}
                 <button
@@ -260,6 +264,17 @@ const ScanQueuePanel = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {uploadTarget && (
+        <ImageUploadModal
+          study={uploadTarget}
+          onClose={() => setUploadTarget(null)}
+          onSuccess={() => {
+            setUploadTarget(null)
+            fetchQueue()
+          }}
+        />
       )}
     </div>
   )

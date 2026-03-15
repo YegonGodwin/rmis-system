@@ -9,15 +9,23 @@ import {
   updateStudy,
   updateStudyStatus,
 } from '../controllers/studies.controller.js';
+import {
+  uploadStudyImages,
+  getStudyImages,
+  deleteStudyImage,
+} from '../controllers/studyImages.controller.js';
 
 const router = express.Router();
 
 router.get('/', requireAuth, listStudies);
 router.get('/queue', requireAuth, requireRole(['Technician', 'Admin']), technicianQueue);
 router.get('/:id', requireAuth, getStudyById);
+router.get('/:id/images', requireAuth, getStudyImages);
 
 router.post('/', requireAuth, requireRole(['Technician', 'Admin']), createStudy);
+router.post('/:id/images', requireAuth, requireRole(['Technician', 'Admin']), uploadStudyImages);
 router.patch('/:id', requireAuth, requireRole(['Technician', 'Admin']), updateStudy);
 router.patch('/:id/status', requireAuth, requireRole(['Technician', 'Admin']), updateStudyStatus);
+router.delete('/:id/images/:imageId', requireAuth, requireRole(['Technician', 'Admin']), deleteStudyImage);
 
 export default router;
