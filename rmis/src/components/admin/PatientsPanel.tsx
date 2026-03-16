@@ -2,8 +2,12 @@ import { useState, useEffect, useCallback } from 'react'
 import { patientService, type Patient } from '../../services/patient.service'
 import PatientTimelineModal from '../PatientTimelineModal'
 
-const PatientsPanel = () => {
-    const [searchTerm, setSearchTerm] = useState('')
+type PatientsPanelProps = {
+    initialSearch?: string
+}
+
+const PatientsPanel = ({ initialSearch = '' }: PatientsPanelProps) => {
+    const [searchTerm, setSearchTerm] = useState(initialSearch)
     const [patients, setPatients] = useState<Patient[]>([])
     const [isLoading, setIsLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)

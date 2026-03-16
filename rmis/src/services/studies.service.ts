@@ -2,7 +2,7 @@ import { api } from './api'
 
 export type Modality = 'CT' | 'MRI' | 'X-Ray' | 'Ultrasound' | 'Mammography' | 'Fluoroscopy'
 export type Priority = 'Routine' | 'Urgent' | 'STAT'
-export type StudyStatus = 'Scheduled' | 'Checked In' | 'In Progress' | 'Completed' | 'Canceled'
+export type StudyStatus = 'Scheduled' | 'Checked In' | 'In Progress' | 'Completed' | 'Canceled' | 'Requires Re-scan'
 
 export type StudyImageUpload = {
   imageData: string // base64 data URI
@@ -68,6 +68,8 @@ export type Study = {
     fullName: string
   }
   assignedAt?: string
+  radiologistFeedback?: string
+  radiologistRejectedAt?: string
   status: StudyStatus
   createdAt: string
   updatedAt: string
@@ -190,5 +192,9 @@ export const studiesService = {
 
   async assignStudy(studyId: string, radiologistId: string | null) {
     return api.patch<{ study: Study }>(`/studies/${studyId}/assign`, { radiologistId })
+  },
+
+  async rejectImages(studyId: string, feedback: string) {
+    return api.post<{ study: Study }>(`/studies/${studyId}/reject-images`, { feedback })
   },
 }

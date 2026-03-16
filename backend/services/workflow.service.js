@@ -46,6 +46,36 @@ export const WorkflowOrchestrator = {
         });
       }
 
+      // Handle re-scan request
+      if (newStatus === 'Requires Re-scan') {
+        const message = `RE-SCAN REQUESTED: ${study.modality} for ${study.patient.fullName}. Reason: ${study.radiologistFeedback}`;
+        
+        emitToRole('Admin', 'NOTIFICATION', {
+          title: 'Study Rejected by Radiologist',
+          message,
+          type: 'error',
+          studyId: String(study._id),
+        });
+
+        // Notify the technician who was involved
+        if (study.checkedInBy) {
+          emitToUser(String(study.checkedInBy), 'NOTIFICATION', {
+            title: 'Image Quality Rejection',
+            message,
+            type: 'error',
+            studyId: String(study._id),
+          });
+        }
+
+        // Also broadcast to all technicians as they might need to pick it up
+        emitToRole('Technician', 'NOTIFICATION', {
+          title: 'Re-scan Required',
+          message,
+          type: 'error',
+          studyId: String(study._id),
+        });
+      }
+
     } catch (err) {
       console.error('[Workflow] Error in onStudyStatusChange:', err);
     }

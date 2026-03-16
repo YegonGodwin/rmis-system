@@ -31,7 +31,7 @@ const updateStudySchema = z
 
 const statusSchema = z
   .object({
-    status: z.enum(['Scheduled', 'Checked In', 'In Progress', 'Completed', 'Canceled', 'No Show', 'Delayed']),
+    status: z.enum(['Scheduled', 'Checked In', 'In Progress', 'Completed', 'Canceled', 'No Show', 'Delayed', 'Requires Re-scan']),
     identityMethod: z
       .enum(['Government ID', 'Insurance Card', 'Facility Bracelet', 'Biometric', 'Other'])
       .optional(),
@@ -41,8 +41,61 @@ const statusSchema = z
     delayReason: z.string().optional(),
     cancelReason: z.string().optional(),
     noShowReason: z.string().optional(),
+    radiologistFeedback: z.string().optional(),
   })
   .strict();
+
+export const rejectStudyImages = async (req, res, next) => {
+  try {
+    if (!req.user || req.user.role !== 'Radiologist') {
+      throw httpError(403, 'Only radiologists can reject study images');
+    }
+
+    const { feedback } = req.body;
+    if (!feedback || !feedback.trim()) {
+      throw httpError(400, 'Feedback is required when rejecting images');
+    }
+
+    const study = await Study.findById(req.params.id);
+    if (!study) {
+      throw httpError(404, 'Study not found');
+    }
+
+    if (study.status !== 'Completed') {
+      throw httpError(409, 'Only completed studies can be rejected for re-scan');
+    }
+
+    study.status = 'Requires Re-scan';
+    study.radiologistFeedback = feedback.trim();
+    study.radiologistRejectedAt = new Date();
+    study.radiologistRejectedBy = req.user.id;
+
+    await study.save();
+
+    // Trigger workflow orchestration (will notify technicians)
+    await WorkflowOrchestrator.onStudyStatusChange(study._id, 'Requires Re-scan');
+
+    await audit({
+      actorId: req.user.id,
+      action: 'Rejected study images',
+      targetType: 'Study',
+      targetId: String(study._id),
+      ipAddress: req.ip,
+      metadata: {
+        studyId: study.studyId,
+        feedback: study.radiologistFeedback,
+      },
+    });
+
+    const populated = await Study.findById(study._id)
+      .populate('patient', 'mrn fullName')
+      .populate('room', 'name modality status');
+
+    res.status(200).json({ study: populated });
+  } catch (err) {
+    next(err);
+  }
+};
 
 const generateStudyId = async () => {
   const count = await Study.estimatedDocumentCount();

@@ -26,6 +26,7 @@ export type ImagingRequest = {
   status: RequestStatus
   createdAt: string
   approvedAt?: string
+  rejectionReason?: string
   rejectedAt?: string
   scheduledAt?: string
 }
@@ -68,8 +69,8 @@ export const imagingRequestService = {
     return response.request
   },
 
-  async reject(id: string) {
-    const response = await api.post<{ request: ImagingRequest }>(`/imaging-requests/${id}/reject`)
+  async reject(id: string, reason?: string) {
+    const response = await api.post<{ request: ImagingRequest }>(`/imaging-requests/${id}/reject`, { reason })
     return response.request
   },
 }

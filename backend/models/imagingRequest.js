@@ -63,6 +63,10 @@ const imagingRequestSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
     },
+    rejectionReason: {
+      type: String,
+      trim: true,
+    },
     rejectedAt: {
       type: Date,
     },

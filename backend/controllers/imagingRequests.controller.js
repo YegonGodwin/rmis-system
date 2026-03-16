@@ -172,6 +172,8 @@ export const rejectImagingRequest = async (req, res, next) => {
       throw httpError(401, 'Unauthorized');
     }
 
+    const { reason } = req.body;
+
     const imagingRequest = await ImagingRequest.findById(req.params.id);
     if (!imagingRequest) {
       throw httpError(404, 'Imaging request not found');
@@ -183,6 +185,7 @@ export const rejectImagingRequest = async (req, res, next) => {
 
     imagingRequest.status = 'Rejected';
     imagingRequest.rejectedBy = req.user.id;
+    imagingRequest.rejectionReason = reason || 'No reason provided';
     imagingRequest.rejectedAt = new Date();
 
     await imagingRequest.save();
@@ -200,6 +203,7 @@ export const rejectImagingRequest = async (req, res, next) => {
       ipAddress: req.ip,
       metadata: {
         requestId: imagingRequest.requestId,
+        reason: imagingRequest.rejectionReason,
       },
     });
 

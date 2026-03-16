@@ -165,9 +165,20 @@ const studySchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ['Scheduled', 'Checked In', 'In Progress', 'Completed', 'Canceled', 'No Show', 'Delayed'],
+      enum: ['Scheduled', 'Checked In', 'In Progress', 'Completed', 'Canceled', 'No Show', 'Delayed', 'Requires Re-scan'],
       default: 'Scheduled',
       index: true,
+    },
+    radiologistFeedback: {
+      type: String,
+      trim: true,
+    },
+    radiologistRejectedAt: {
+      type: Date,
+    },
+    radiologistRejectedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
     },
   },
   {

@@ -4,13 +4,16 @@ import type { Study, StudyImageMeta } from '../../services/studies.service'
 import { reportsService } from '../../services/reports.service'
 import { reportTemplatesService } from '../../services/reportTemplates.service'
 import type { ReportTemplate } from '../../services/reportTemplates.service'
+import PatientTimelineModal from '../PatientTimelineModal'
 
 const ReportingPanel = ({ preselectedStudy }: { preselectedStudy?: Study | null }) => {
   const [searchTerm, setSearchTerm] = useState('')
   const [studies, setStudies] = useState<Study[]>([])
   const [selectedStudy, setSelectedStudy] = useState<Study | null>(null)
+  const [existingReport, setExistingReport] = useState<any>(null)
   const [templates, setTemplates] = useState<ReportTemplate[]>([])
   const [showTemplates, setShowTemplates] = useState(false)
+  const [showTimeline, setShowTimeline] = useState(false)
   const [loading, setLoading] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [showSuccess, setShowSuccess] = useState(false)
@@ -59,16 +62,45 @@ const ReportingPanel = ({ preselectedStudy }: { preselectedStudy?: Study | null 
     }
   }
 
-  const handleSelectStudy = (study: Study) => {
+  const handleSelectStudy = async (study: Study) => {
     setSelectedStudy(study)
     setStudies([])
     setSearchTerm('')
     setStudyImages([])
     setLightboxIdx(null)
-    setFormData({
-      ...formData,
-      studyType: `${study.modality} ${study.bodyPart}`
-    })
+    
+    // Check for existing report
+    try {
+      setLoading(true)
+      const { reports } = await reportsService.getReports({ studyId: study._id })
+      if (reports.length > 0) {
+        const report = reports[0]
+        setExistingReport(report)
+        setFormData({
+          studyType: report.studyType,
+          technique: report.technique || '',
+          findings: report.findings,
+          impression: report.impression,
+          recommendations: report.recommendations || '',
+          isCritical: report.isCritical
+        })
+      } else {
+        setExistingReport(null)
+        setFormData({
+          studyType: `${study.modality} ${study.bodyPart}`,
+          technique: '',
+          findings: '',
+          impression: '',
+          recommendations: '',
+          isCritical: false
+        })
+      }
+    } catch (err) {
+      console.error('Failed to check for existing report:', err)
+    } finally {
+      setLoading(false)
+    }
+
     fetchTemplates(study.modality, study.bodyPart)
     fetchStudyImages(study._id)
   }
@@ -102,19 +134,46 @@ const ReportingPanel = ({ preselectedStudy }: { preselectedStudy?: Study | null 
     setShowTemplates(false)
   }
 
+  const handleRejectImages = async () => {
+    if (!selectedStudy) return
+    const feedback = window.prompt('Please provide feedback for the technician (why is a re-scan needed?):')
+    if (!feedback) return
+
+    try {
+      setSubmitting(true)
+      await studiesService.rejectImages(selectedStudy._id, feedback)
+      setShowSuccess(true)
+      setLastStatus('Rejected (Re-scan requested)')
+      setSelectedStudy(null)
+      setTimeout(() => setShowSuccess(false), 3000)
+    } catch (err: any) {
+      alert(err instanceof Error ? err.message : 'Failed to reject images')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
   const handleSubmit = async (status: 'Draft' | 'Preliminary' | 'Final') => {
     if (!selectedStudy) return
 
     try {
       setSubmitting(true)
-      await reportsService.create({
-        studyId: selectedStudy._id,
-        status,
-        ...formData
-      })
+      if (existingReport) {
+        await reportsService.update(existingReport._id, {
+          ...formData,
+          status
+        })
+      } else {
+        await reportsService.create({
+          studyId: selectedStudy._id,
+          status,
+          ...formData
+        })
+      }
       setLastStatus(status)
       setShowSuccess(true)
       setSelectedStudy(null)
+      setExistingReport(null)
       setFormData({
         studyType: '',
         technique: '',
@@ -126,7 +185,7 @@ const ReportingPanel = ({ preselectedStudy }: { preselectedStudy?: Study | null 
       setTimeout(() => setShowSuccess(false), 3000)
     } catch (err: any) {
       console.error('Submission failed:', err)
-      alert(err.response?.data?.message || 'Failed to save report')
+      alert(err instanceof Error ? err.message : 'Failed to save report')
     } finally {
       setSubmitting(false)
     }
@@ -201,13 +260,22 @@ const ReportingPanel = ({ preselectedStudy }: { preselectedStudy?: Study | null 
                 <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Active Case</p>
                 <p className="text-lg font-bold text-slate-900">{selectedStudy.patient.fullName} • {selectedStudy.accessionNumber}</p>
               </div>
-              <button
-                type="button"
-                onClick={() => setShowTemplates(!showTemplates)}
-                className="rounded-lg border border-purple-600 bg-white px-4 py-2 text-sm font-semibold text-purple-700 hover:bg-purple-50 transition"
-              >
-                {templates.length > 0 ? `Templates (${templates.length})` : 'No Templates Available'}
-              </button>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowTimeline(true)}
+                  className="rounded-lg border border-blue-600 bg-white px-4 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-50 transition"
+                >
+                  Patient History
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowTemplates(!showTemplates)}
+                  className="rounded-lg border border-purple-600 bg-white px-4 py-2 text-sm font-semibold text-purple-700 hover:bg-purple-50 transition"
+                >
+                  {templates.length > 0 ? `Templates (${templates.length})` : 'No Templates Available'}
+                </button>
+              </div>
             </div>
 
             {/* Image viewer strip */}
@@ -357,6 +425,14 @@ const ReportingPanel = ({ preselectedStudy }: { preselectedStudy?: Study | null 
                 <button
                   type="button"
                   disabled={submitting}
+                  onClick={handleRejectImages}
+                  className="flex-1 rounded-lg border border-red-300 py-3 text-sm font-semibold text-red-700 hover:bg-red-50 disabled:opacity-50"
+                >
+                  Reject Images (Re-scan)
+                </button>
+                <button
+                  type="button"
+                  disabled={submitting}
                   onClick={() => handleSubmit('Final')}
                   className="flex-1 rounded-lg bg-purple-600 py-3 text-sm font-semibold text-white hover:bg-purple-500 disabled:opacity-50 shadow-lg shadow-purple-200"
                 >
@@ -435,6 +511,13 @@ const ReportingPanel = ({ preselectedStudy }: { preselectedStudy?: Study | null 
             </svg>
           </button>
         </div>
+      )}
+
+      {showTimeline && selectedStudy && (
+        <PatientTimelineModal 
+          patientId={selectedStudy.patient._id} 
+          onClose={() => setShowTimeline(false)} 
+        />
       )}
     </div>
   )

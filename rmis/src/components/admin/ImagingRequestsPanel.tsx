@@ -40,8 +40,11 @@ const ImagingRequestsPanel = ({ onSchedule }: ImagingRequestsPanelProps) => {
   }
 
   const handleReject = async (id: string) => {
+    const reason = window.prompt('Please enter the reason for rejection:')
+    if (reason === null) return // Cancelled
+
     try {
-      const updated = await imagingRequestService.reject(id)
+      const updated = await imagingRequestService.reject(id, reason)
       setRequests((prev) => prev.map((req) => (req._id === id ? updated : req)))
     } catch (err: any) {
       alert(err.message || 'Failed to reject request')
@@ -138,19 +141,26 @@ const ImagingRequestsPanel = ({ onSchedule }: ImagingRequestsPanelProps) => {
                   <div className="mt-0.5 text-xs text-slate-400">By {req.requestedBy?.fullName}</div>
                 </td>
                 <td className="px-4 py-3">
-                  <span
-                    className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
-                      req.status === 'Pending'
-                        ? 'bg-yellow-50 text-yellow-800'
-                        : req.status === 'Approved'
-                          ? 'bg-green-50 text-green-700'
-                          : req.status === 'Rejected'
-                            ? 'bg-red-50 text-red-700'
-                            : 'bg-slate-100 text-slate-700'
-                    }`}
-                  >
-                    {req.status}
-                  </span>
+                  <div className="flex flex-col">
+                    <span
+                      className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium w-fit ${
+                        req.status === 'Pending'
+                          ? 'bg-yellow-50 text-yellow-800'
+                          : req.status === 'Approved'
+                            ? 'bg-green-50 text-green-700'
+                            : req.status === 'Rejected'
+                              ? 'bg-red-50 text-red-700'
+                              : 'bg-slate-100 text-slate-700'
+                      }`}
+                    >
+                      {req.status}
+                    </span>
+                    {req.status === 'Rejected' && req.rejectionReason && (
+                      <span className="mt-1 text-[10px] text-red-600 font-medium italic max-w-[120px] truncate" title={req.rejectionReason}>
+                        Reason: {req.rejectionReason}
+                      </span>
+                    )}
+                  </div>
                 </td>
                 <td className="px-4 py-3">
                   {req.status === 'Pending' ? (

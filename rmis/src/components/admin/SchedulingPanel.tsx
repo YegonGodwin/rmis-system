@@ -525,22 +525,44 @@ const SchedulingPanel = ({ initialDate, prefillRequest, onClearPrefill }: Schedu
                                 <select
                                     required
                                     value={newStudy.roomId}
-                                    onChange={(e) => setNewStudy({ ...newStudy, roomId: e.target.value })}
+                                    onChange={(e) => {
+                                        const room = rooms.find(r => r._id === e.target.value);
+                                        if (room && (room.status === 'Maintenance' || room.status === 'Offline')) {
+                                            alert(`This room is currently ${room.status} and cannot be scheduled.`);
+                                            return;
+                                        }
+                                        setNewStudy({ ...newStudy, roomId: e.target.value });
+                                    }}
                                     className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
                                 >
                                     <option value="">Select an available {newStudy.modality} room</option>
                                     {filteredRooms.map((room) => (
-                                        <option key={room._id} value={room._id}>
+                                        <option 
+                                            key={room._id} 
+                                            value={room._id}
+                                            disabled={room.status === 'Maintenance' || room.status === 'Offline'}
+                                        >
                                             {room.name} {room.assignedTechnician ? `(Tech: ${room.assignedTechnician.fullName})` : '(No Tech Assigned)'} - {room.status}
+                                            {(room.status === 'Maintenance' || room.status === 'Offline') ? ' [UNAVAILABLE]' : ''}
                                         </option>
                                     ))}
                                 </select>
                                 {selectedRoomDetails && (
-                                    <div className={`mt-2 rounded-lg p-2 text-xs flex items-center gap-2 ${selectedRoomDetails.assignedTechnician ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>
-                                        <div className={`h-2 w-2 rounded-full ${selectedRoomDetails.assignedTechnician ? 'bg-emerald-500' : 'bg-amber-500'}`}></div>
-                                        {selectedRoomDetails.assignedTechnician 
-                                            ? `Assigned: ${selectedRoomDetails.assignedTechnician.fullName} is ready for this scan.`
-                                            : `Warning: No technician is currently deployed to this room.`}
+                                    <div className="space-y-2 mt-2">
+                                        <div className={`rounded-lg p-2 text-xs flex items-center gap-2 ${selectedRoomDetails.assignedTechnician ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>
+                                            <div className={`h-2 w-2 rounded-full ${selectedRoomDetails.assignedTechnician ? 'bg-emerald-500' : 'bg-amber-500'}`}></div>
+                                            {selectedRoomDetails.assignedTechnician 
+                                                ? `Assigned: ${selectedRoomDetails.assignedTechnician.fullName} is ready for this scan.`
+                                                : `Warning: No technician is currently deployed to this room.`}
+                                        </div>
+                                        {selectedRoomDetails.status !== 'Active' && selectedRoomDetails.status !== 'Idle' && (
+                                            <div className="rounded-lg p-2 text-xs flex items-center gap-2 bg-red-50 text-red-700 font-bold border border-red-200">
+                                                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                                </svg>
+                                                CRITICAL: Room is {selectedRoomDetails.status}. Please select a different resource.
+                                            </div>
+                                        )}
                                     </div>
                                 )}
                             </div>

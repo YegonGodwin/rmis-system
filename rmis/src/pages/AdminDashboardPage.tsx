@@ -23,8 +23,17 @@ type AdminDashboardPageProps = {
 const AdminDashboardPage = ({ onLogout }: AdminDashboardPageProps) => {
   const [activeSection, setActiveSection] = useState('overview')
   const [prefillRequest, setPrefillRequest] = useState<any>(null)
+  const [globalSearch, setGlobalSearch] = useState('')
+  const [searchInput, setSearchInput] = useState('')
   const reportsStats = useReportsStats()
   const { stats, workflow, recentStudies, alerts, loading, error } = useDashboardOverview()
+
+  const handleGlobalSearch = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!searchInput.trim()) return
+    setGlobalSearch(searchInput)
+    setActiveSection('patients')
+  }
 
   const kpis = useMemo(
     () => [
@@ -94,7 +103,7 @@ const AdminDashboardPage = ({ onLogout }: AdminDashboardPageProps) => {
         <section className="flex h-full flex-col gap-4 overflow-hidden">
           <header className="shrink-0 rounded-2xl bg-gradient-to-r from-slate-900 to-slate-700 p-5 text-white shadow-sm">
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
+              <div className="min-w-[200px]">
                 <p className="text-sm text-slate-200">Radiology Department Control Center</p>
                 <h2 className="mt-1 text-2xl font-bold">
                   {activeSection === 'audit'
@@ -118,6 +127,22 @@ const AdminDashboardPage = ({ onLogout }: AdminDashboardPageProps) => {
                                 : 'Admin Dashboard'}
                 </h2>
               </div>
+
+              <form onSubmit={handleGlobalSearch} className="flex-1 max-w-md hidden lg:block mx-4">
+                <div className="relative">
+                  <input
+                    type="text"
+                    placeholder="Search Patient MRN or Name..."
+                    value={searchInput}
+                    onChange={(e) => setSearchInput(e.target.value)}
+                    className="w-full rounded-xl bg-white/10 border border-white/20 px-4 py-2 pl-10 text-sm text-white placeholder:text-slate-400 focus:bg-white/20 focus:outline-none focus:ring-2 focus:ring-white/30"
+                  />
+                  <svg className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                </div>
+              </form>
+
               <div className="flex gap-2">
                 <button
                   type="button"
@@ -158,7 +183,7 @@ const AdminDashboardPage = ({ onLogout }: AdminDashboardPageProps) => {
             ) : activeSection === 'reports' ? (
               <ReportsPanel />
             ) : activeSection === 'patients' ? (
-              <PatientsPanel />
+              <PatientsPanel initialSearch={globalSearch} />
             ) : activeSection === 'critical' ? (
               <CriticalResultsPanel />
             ) : activeSection === 'users' ? (

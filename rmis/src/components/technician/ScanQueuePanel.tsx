@@ -6,7 +6,7 @@ import ImageUploadModal from './ImageUploadModal'
 const ScanQueuePanel = () => {
   const [queue, setQueue] = useState<Study[]>([])
   const [loading, setLoading] = useState(true)
-  const [filter, setFilter] = useState<'All' | 'STAT' | 'Checked In'>('All')
+  const [filter, setFilter] = useState<'All' | 'STAT' | 'Checked In' | 'Re-scan'>('All')
   const [selectedItem, setSelectedItem] = useState<Study | null>(null)
   const [updating, setUpdating] = useState(false)
   const [uploadTarget, setUploadTarget] = useState<Study | null>(null)
@@ -14,8 +14,12 @@ const ScanQueuePanel = () => {
   const fetchQueue = useCallback(async () => {
     try {
       setLoading(true)
-      const res = await studiesService.getTechnicianQueue()
-      setQueue(res.studies)
+      const [res, rejected] = await Promise.all([
+        studiesService.getTechnicianQueue(),
+        studiesService.getStudies({ status: 'Requires Re-scan' })
+      ])
+      const combined = [...res.studies, ...rejected.studies].filter((s, i, a) => a.findIndex(t => t._id === s._id) === i)
+      setQueue(combined)
     } catch (err) {
       console.error('Failed to fetch queue:', err)
     } finally {
@@ -30,6 +34,7 @@ const ScanQueuePanel = () => {
   const filteredQueue = queue.filter((item) => {
     if (filter === 'STAT') return item.priority === 'STAT'
     if (filter === 'Checked In') return item.status === 'Checked In'
+    if (filter === 'Re-scan') return item.status === 'Requires Re-scan'
     return true
   })
 
@@ -63,7 +68,7 @@ const ScanQueuePanel = () => {
           <p className="mt-1 text-sm text-slate-500">Manage scheduled imaging procedures</p>
         </div>
         <div className="flex gap-2">
-          {(['All', 'STAT', 'Checked In'] as const).map((f) => (
+          {(['All', 'STAT', 'Checked In', 'Re-scan'] as const).map((f) => (
             <button
               key={f}
               onClick={() => setFilter(f)}
@@ -104,7 +109,7 @@ const ScanQueuePanel = () => {
                     key={item._id}
                     className={`transition hover:bg-slate-50 ${
                       item.priority === 'STAT' ? 'bg-red-50/30' : ''
-                    }`}
+                    } ${item.status === 'Requires Re-scan' ? 'bg-red-50 border-l-4 border-l-red-600' : ''}`}
                   >
                     <td className="px-4 py-3">
                       <div className="font-medium text-slate-900">
@@ -152,9 +157,11 @@ const ScanQueuePanel = () => {
                               ? 'bg-blue-100 text-blue-700'
                               : item.status === 'Checked In'
                                 ? 'bg-teal-100 text-teal-700'
-                                : item.status === 'Canceled'
-                                  ? 'bg-red-100 text-red-700'
-                                  : 'bg-slate-100 text-slate-700'
+                                : item.status === 'Requires Re-scan'
+                                  ? 'bg-red-100 text-red-700 animate-pulse'
+                                  : item.status === 'Canceled'
+                                    ? 'bg-red-100 text-red-700'
+                                    : 'bg-slate-100 text-slate-700'
                         }`}
                       >
                         {item.status}
@@ -218,6 +225,18 @@ const ScanQueuePanel = () => {
                 </div>
               )}
 
+              {selectedItem.status === 'Requires Re-scan' && selectedItem.radiologistFeedback && (
+                <div className="rounded-lg border-2 border-red-200 bg-red-50 p-4">
+                  <p className="text-sm font-bold text-red-700 uppercase tracking-wider flex items-center gap-2">
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                    Radiologist Feedback (Re-scan Required)
+                  </p>
+                  <p className="mt-2 text-red-900 font-medium">{selectedItem.radiologistFeedback}</p>
+                </div>
+              )}
+
               <div className="rounded-lg bg-slate-50 p-4">
                 <p className="text-sm font-semibold text-slate-700">Current Status</p>
                 <p className="mt-1 text-lg font-bold text-slate-900">{selectedItem.status}</p>
@@ -233,13 +252,13 @@ const ScanQueuePanel = () => {
                     Mark Checked In
                   </button>
                 )}
-                {selectedItem.status === 'Checked In' && (
+                {(selectedItem.status === 'Checked In' || selectedItem.status === 'Requires Re-scan') && (
                   <button
                     disabled={updating}
                     onClick={() => handleUpdateStatus(selectedItem._id, 'In Progress')}
                     className="rounded-lg bg-blue-600 py-2.5 text-sm font-semibold text-white hover:bg-blue-500 disabled:opacity-50"
                   >
-                    Start Scan
+                    {selectedItem.status === 'Requires Re-scan' ? 'Start Re-scan' : 'Start Scan'}
                   </button>
                 )}
                 {selectedItem.status === 'In Progress' && (
